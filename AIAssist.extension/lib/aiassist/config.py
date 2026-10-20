@@ -53,3 +53,14 @@ def append_recipe(text):
         os.makedirs(CONFIG_DIR)
     with io.open(RECIPES_PATH, "a", encoding="utf-8") as f:
         f.write(u"- " + text.strip() + u"\n")
+
+
+def log_error(text):
+    """Best-effort error log: ~/.aiassist/error.log."""
+    try:
+        if not os.path.isdir(CONFIG_DIR):
+            os.makedirs(CONFIG_DIR)
+        with io.open(os.path.join(CONFIG_DIR, "error.log"), "a", encoding="utf-8") as f:
+            f.write(u"%s\n" % text)
+    except Exception:
+        pass

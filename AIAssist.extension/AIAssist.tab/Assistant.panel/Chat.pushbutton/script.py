@@ -13,8 +13,19 @@ from System.Windows.Forms.Integration import ElementHost
 from System.Windows.Interop import WindowInteropHelper
 from pyrevit import forms
 
+from aiassist import config
 from aiassist.agent import Agent
 from aiassist.bridge import Bridge
+
+
+def _guard(fn):
+    """Never let an exception escape a UI handler into Revit (fatal error)."""
+    def wrapper(self, *args):
+        try:
+            return fn(self, *args)
+        except Exception as ex:
+            config.log_error(u"%s: %s" % (fn.__name__, ex))
+    return wrapper
 
 
 class ChatWindow(forms.WPFWindow):
@@ -50,11 +61,13 @@ class ChatWindow(forms.WPFWindow):
         self._ui(do)
 
     # -- events
+    @_guard
     def input_keydown(self, sender, args):
         if args.Key == Key.Enter:
             args.Handled = True
             self.send_click(sender, args)
 
+    @_guard
     def send_click(self, sender, args):
         text = self.input.Text.strip()
         if not text or self.busy:
