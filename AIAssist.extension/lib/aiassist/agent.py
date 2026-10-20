@@ -46,7 +46,8 @@ class Agent(object):
 
         for _ in range(MAX_STEPS):
             on_status(u"Думаю…")
-            answer, calls = self.chat.step(self._system(), tools.specs())
+            answer, calls = self.chat.step(self._system(), tools.specs(),
+                                           on_status)
             if not calls:
                 return answer
 

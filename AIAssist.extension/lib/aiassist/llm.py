@@ -6,8 +6,35 @@
     text, calls = chat.step(system, tool_specs)   # calls: [{id, name, args}]
     chat.tool_results([{id, name, content, is_error}])
 """
+import re
+import time
+
 from aiassist import http
 from aiassist.http import LLMError  # noqa: F401
+
+MAX_RETRIES = 3
+MAX_WAIT = 90  # seconds; longer waits (daily quota) are reported, not awaited
+
+
+def _retry_delay(detail):
+    m = (re.search(r'retryDelay"\s*:\s*"([0-9.]+)s"', detail or u"") or
+         re.search(r'retry in ([0-9.]+)s', detail or u""))
+    return float(m.group(1)) if m else 20.0
+
+
+def _post(url, headers, payload, on_status):
+    """post_json that waits out per-minute rate limits (HTTP 429)."""
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return http.post_json(url, headers, payload)
+        except LLMError as ex:
+            wait = _retry_delay(getattr(ex, "detail", u"")) + 1
+            if (getattr(ex, "status", None) != 429 or attempt == MAX_RETRIES
+                    or wait > MAX_WAIT):
+                raise
+            if on_status:
+                on_status(u"Лимит запросов, жду %d с…" % wait)
+            time.sleep(wait)
 
 
 def make_chat(cfg):
@@ -31,12 +58,13 @@ class AnthropicChat(object):
     def user(self, text):
         self.messages.append({"role": "user", "content": text})
 
-    def step(self, system, tool_specs):
-        resp = http.post_json(
+    def step(self, system, tool_specs, on_status=None):
+        resp = _post(
             self.URL,
             {"x-api-key": self.cfg["api_key"], "anthropic-version": "2023-06-01"},
             {"model": self.cfg["model"], "max_tokens": self.cfg["max_tokens"],
-             "system": system, "messages": self.messages, "tools": tool_specs})
+             "system": system, "messages": self.messages, "tools": tool_specs},
+            on_status)
         self.messages.append({"role": "assistant", "content": resp["content"]})
         text = u"\n".join(b["text"] for b in resp["content"] if b["type"] == "text")
         calls = [{"id": b["id"], "name": b["name"], "args": b["input"]}
@@ -70,13 +98,14 @@ class GeminiChat(object):
             out.append(decl)
         return [{"function_declarations": out}]
 
-    def step(self, system, tool_specs):
-        resp = http.post_json(
+    def step(self, system, tool_specs, on_status=None):
+        resp = _post(
             self.URL % self.cfg["model"],
             {"x-goog-api-key": self.cfg["api_key"]},
             {"system_instruction": {"parts": [{"text": system}]},
              "contents": self.contents,
-             "tools": self._declarations(tool_specs)})
+             "tools": self._declarations(tool_specs)},
+            on_status)
         cands = resp.get("candidates") or []
         if not cands:
             raise LLMError(u"Gemini не вернул ответ: %s" % resp.get("promptFeedback", resp))

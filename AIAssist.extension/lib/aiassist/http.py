@@ -10,7 +10,10 @@ from aiassist import config, jsonutil
 
 
 class LLMError(Exception):
-    pass
+    def __init__(self, message, status=None, detail=u""):
+        Exception.__init__(self, message)
+        self.status = status
+        self.detail = detail
 
 
 def _read_stream(stream):
@@ -55,11 +58,13 @@ def post_json(url, headers, payload, timeout_ms=60000):
         finally:
             resp.Close()
     except WebException as ex:
-        detail = u""
+        detail, status = u"", None
         if ex.Response is not None:
+            status = int(ex.Response.StatusCode)
             detail = _read_stream(ex.Response.GetResponseStream())
         config.log_error(u"HTTP error: " + jsonutil.text(ex.Message))
         raise LLMError(u"Ошибка API: %s %s" % (jsonutil.text(ex.Message),
-                                               jsonutil.text(detail)))
+                                               jsonutil.text(detail)),
+                       status, detail)
 
     return jsonutil.loads(text)
