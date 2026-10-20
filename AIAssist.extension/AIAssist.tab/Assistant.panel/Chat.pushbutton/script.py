@@ -2,6 +2,10 @@
 """Opens the AI assistant chat window (modeless, next to Revit)."""
 import threading
 
+import clr
+clr.AddReference("PresentationCore")
+clr.AddReference("PresentationFramework")
+clr.AddReference("WindowsBase")
 from System import Action
 from System.Windows.Input import Key
 from pyrevit import forms
