@@ -1,6 +1,2 @@
-title:
-  ru_ru: AI-ассистент
-  en_us: AI Assistant
-tooltip:
-  ru_ru: Чат с ассистентом по модели Revit
-  en_us: Chat with the Revit model assistant
+title: AI-ассистент
+tooltip: Чат с ассистентом по модели Revit
