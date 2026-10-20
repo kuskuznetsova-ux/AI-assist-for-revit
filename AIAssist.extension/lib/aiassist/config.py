@@ -3,6 +3,7 @@
 import os
 import io
 import json
+import time
 
 CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".aiassist")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
@@ -56,11 +57,11 @@ def append_recipe(text):
 
 
 def log_error(text):
-    """Best-effort error log: ~/.aiassist/error.log."""
+    """Best-effort timestamped log: ~/.aiassist/error.log."""
     try:
         if not os.path.isdir(CONFIG_DIR):
             os.makedirs(CONFIG_DIR)
         with io.open(os.path.join(CONFIG_DIR, "error.log"), "a", encoding="utf-8") as f:
-            f.write(u"%s\n" % text)
+            f.write(u"%s %s\n" % (time.strftime("%H:%M:%S"), text))
     except Exception:
         pass
