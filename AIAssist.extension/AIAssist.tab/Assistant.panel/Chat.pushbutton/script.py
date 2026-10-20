@@ -6,8 +6,11 @@ import clr
 clr.AddReference("PresentationCore")
 clr.AddReference("PresentationFramework")
 clr.AddReference("WindowsBase")
+clr.AddReference("WindowsFormsIntegration")
 from System import Action
 from System.Windows.Input import Key
+from System.Windows.Forms.Integration import ElementHost
+from System.Windows.Interop import WindowInteropHelper
 from pyrevit import forms
 
 from aiassist.agent import Agent
@@ -17,6 +20,12 @@ from aiassist.bridge import Bridge
 class ChatWindow(forms.WPFWindow):
     def __init__(self):
         forms.WPFWindow.__init__(self, "ui.xaml")
+        # Without this, keystrokes in a modeless WPF window go to Revit itself.
+        try:
+            ElementHost.EnableModelessKeyboardInterop(self)
+            WindowInteropHelper(self).Owner = __revit__.MainWindowHandle
+        except Exception:
+            pass
         self.agent = Agent(Bridge())
         self.busy = False
         self._append(u"Ассистент: чем помочь? Например: «выбери все стены толще 200».")
