@@ -2,6 +2,10 @@
 """Opens the AI assistant chat window (modeless, next to Revit)."""
 import threading
 
+# Keep the Python engine alive after the script returns: the modeless window and
+# the ExternalEvent handler are Python callbacks that Revit invokes later.
+__persistentengine__ = True
+
 import clr
 clr.AddReference("PresentationCore")
 clr.AddReference("PresentationFramework")

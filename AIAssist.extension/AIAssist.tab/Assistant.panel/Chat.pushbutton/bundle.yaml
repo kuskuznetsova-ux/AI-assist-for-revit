@@ -1,2 +1,5 @@
 title: AI-ассистент
 tooltip: Чат с ассистентом по модели Revit
+engine:
+  clean: false
+  persistent: true
