@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Agent loop: user text -> LLM -> tool calls on Revit -> final answer."""
-import json
-
-from aiassist import config, llm, tools
+from aiassist import config, jsonutil, llm, tools
 
 MAX_STEPS = 12
 MAX_RESULT_CHARS = 8000
@@ -34,10 +32,10 @@ class Agent(object):
             return u"Неизвестный инструмент: %s" % name, True
         try:
             result = self.bridge.run(lambda uiapp: entry["fn"](uiapp, **args))
-            text = json.dumps(result, ensure_ascii=False)
+            text = jsonutil.dumps(result, ascii_only=False)
             return text[:MAX_RESULT_CHARS], False
         except Exception as ex:
-            return u"Ошибка: %s" % ex, True
+            return u"Ошибка: " + jsonutil.err_text(ex), True
 
     def ask(self, text, on_status):
         """Blocking; call from a background thread. Returns the final answer."""

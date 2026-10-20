@@ -136,10 +136,9 @@ def _compare(actual, op, expected):
 
 
 def unicode_lower(v):
-    try:
-        return unicode(v).lower()  # noqa: F821 (IronPython 2.7)
-    except NameError:
-        return str(v).lower()
+    if not isinstance(v, basestring):  # noqa: F821 (IronPython 2.7)
+        v = str(v)
+    return v.lower()
 
 
 # ------------------------------------------------------------------ tools

@@ -17,7 +17,7 @@ from System.Windows.Forms.Integration import ElementHost
 from System.Windows.Interop import WindowInteropHelper
 from pyrevit import forms
 
-from aiassist import config
+from aiassist import config, jsonutil
 from aiassist.agent import Agent
 from aiassist.bridge import Bridge
 
@@ -28,7 +28,7 @@ def _guard(fn):
         try:
             return fn(self, *args)
         except Exception as ex:
-            config.log_error(u"%s: %s" % (fn.__name__, ex))
+            config.log_error(fn.__name__ + u": " + jsonutil.err_text(ex))
     return wrapper
 
 
@@ -88,7 +88,7 @@ class ChatWindow(forms.WPFWindow):
             answer = self.agent.ask(text, self._set_status)
             self._append(u"Ассистент: " + answer)
         except Exception as ex:
-            self._append(u"Ошибка: %s" % ex)
+            self._append(u"Ошибка: " + jsonutil.err_text(ex))
         finally:
             self._set_status(u"")
             self._set_busy(False)

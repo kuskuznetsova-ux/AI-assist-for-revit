@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """JSON POST over .NET HttpWebRequest (works in IronPython 2.7 and CPython)."""
-import json
-
 import clr  # noqa: F401
 from System.IO import StreamReader
 from System.Net import (HttpWebRequest, ServicePointManager,
                         SecurityProtocolType, WebException)
 from System.Text import Encoding
+
+from aiassist import jsonutil
 
 
 class LLMError(Exception):
@@ -23,8 +23,8 @@ def _read_stream(stream):
 
 def post_json(url, headers, payload, timeout_ms=180000):
     ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
-    # ensure_ascii keeps the body pure ASCII, so no encoding surprises.
-    body = Encoding.ASCII.GetBytes(json.dumps(payload, ensure_ascii=True))
+    # Pure-ASCII body (non-ASCII is \\u-escaped), so no encoding surprises.
+    body = Encoding.ASCII.GetBytes(jsonutil.dumps(payload))
 
     req = HttpWebRequest.Create(url)
     req.Method = "POST"
@@ -50,6 +50,7 @@ def post_json(url, headers, payload, timeout_ms=180000):
         detail = u""
         if ex.Response is not None:
             detail = _read_stream(ex.Response.GetResponseStream())
-        raise LLMError(u"Ошибка API: %s %s" % (ex.Message, detail))
+        raise LLMError(u"Ошибка API: %s %s" % (jsonutil.text(ex.Message),
+                                               jsonutil.text(detail)))
 
-    return json.loads(text)
+    return jsonutil.loads(text)

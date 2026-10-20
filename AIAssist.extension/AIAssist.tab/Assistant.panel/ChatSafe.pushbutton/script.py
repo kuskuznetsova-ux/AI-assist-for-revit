@@ -4,6 +4,7 @@ in the pyRevit output window. Runs synchronously inside the command, so Revit
 API calls are made directly (no ExternalEvent)."""
 from pyrevit import forms, script
 
+from aiassist import jsonutil
 from aiassist.agent import Agent
 
 
@@ -25,4 +26,4 @@ while True:
     try:
         out.print_md(u"**Ассистент:** " + agent.ask(text, lambda s: None))
     except Exception as ex:
-        out.print_md(u"**Ошибка:** %s" % ex)
+        out.print_md(u"**Ошибка:** " + jsonutil.err_text(ex))
