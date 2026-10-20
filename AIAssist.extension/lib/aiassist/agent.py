@@ -19,7 +19,8 @@ SYSTEM_PROMPT = u"""Ты — ассистент внутри Autodesk Revit. П�
 class Agent(object):
     def __init__(self, bridge):
         self.bridge = bridge
-        self.messages = []
+        self.chat = None
+        self._chat_cfg = None
 
     def _system(self):
         recipes = config.load_recipes().strip()
@@ -41,28 +42,22 @@ class Agent(object):
     def ask(self, text, on_status):
         """Blocking; call from a background thread. Returns the final answer."""
         cfg = config.load()
-        self.messages.append({"role": "user", "content": text})
+        if self.chat is None or self._chat_cfg != cfg:
+            self.chat, self._chat_cfg = llm.make_chat(cfg), cfg
+        self.chat.user(text)
 
         for _ in range(MAX_STEPS):
             on_status(u"Думаю…")
-            resp = llm.create_message(cfg, self._system(), self.messages,
-                                      tools.specs())
-            self.messages.append({"role": "assistant", "content": resp["content"]})
-
-            if resp.get("stop_reason") != "tool_use":
-                return u"\n".join(b["text"] for b in resp["content"]
-                                  if b["type"] == "text")
+            answer, calls = self.chat.step(self._system(), tools.specs())
+            if not calls:
+                return answer
 
             results = []
-            for block in resp["content"]:
-                if block["type"] != "tool_use":
-                    continue
-                on_status(u"Выполняю: %s" % block["name"])
-                out, is_error = self._run_tool(block["name"], block["input"])
-                results.append({"type": "tool_result",
-                                "tool_use_id": block["id"],
-                                "content": out,
-                                "is_error": is_error})
-            self.messages.append({"role": "user", "content": results})
+            for call in calls:
+                on_status(u"Выполняю: %s" % call["name"])
+                out, is_error = self._run_tool(call["name"], call["args"])
+                results.append({"id": call["id"], "name": call["name"],
+                                "content": out, "is_error": is_error})
+            self.chat.tool_results(results)
 
         return u"Остановился: слишком много шагов подряд."

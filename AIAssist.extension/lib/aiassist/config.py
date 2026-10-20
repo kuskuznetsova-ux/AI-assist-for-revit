@@ -8,7 +8,11 @@ CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".aiassist")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 RECIPES_PATH = os.path.join(CONFIG_DIR, "recipes.md")
 
-DEFAULT_MODEL = "claude-sonnet-5-5"
+DEFAULT_MODELS = {
+    "gemini": "gemini-flash-latest",
+    "anthropic": "claude-sonnet-5-5",
+}
+ENV_KEYS = {"gemini": "GEMINI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
 
 
 def _read_file():
@@ -23,9 +27,12 @@ def _read_file():
 
 def load():
     data = _read_file()
+    provider = os.environ.get("AIASSIST_PROVIDER") or data.get("provider", "gemini")
     return {
-        "api_key": os.environ.get("ANTHROPIC_API_KEY") or data.get("api_key", ""),
-        "model": os.environ.get("AIASSIST_MODEL") or data.get("model", DEFAULT_MODEL),
+        "provider": provider,
+        "api_key": os.environ.get(ENV_KEYS.get(provider, "")) or data.get("api_key", ""),
+        "model": os.environ.get("AIASSIST_MODEL") or data.get("model")
+                 or DEFAULT_MODELS.get(provider, ""),
         "max_tokens": int(data.get("max_tokens", 4096)),
     }
 

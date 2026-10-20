@@ -2,7 +2,7 @@
 
 AI-ассистент внутри Revit (2022+): чат-окно, команды на естественном языке,
 выбор элементов, массовое редактирование параметров. Плагин на pyRevit (Python),
-«мозг» — Claude через Anthropic API (tool use).
+«мозг» — Gemini (бесплатный тариф Google AI Studio) или Claude (Anthropic API), через tool use.
 
 ## Установка для теста
 
@@ -14,11 +14,15 @@ AI-ассистент внутри Revit (2022+): чат-окно, команд�
    pyrevit extensions paths add C:\путь\к\AI-assist-for-revit
    ```
    (или pyRevit → Settings → Custom Extension Directories → Add), затем **Reload**.
-3. Создать `%USERPROFILE%\.aiassist\config.json`:
+3. Получить ключ Gemini на https://aistudio.google.com (Get API key) и создать
+   `%USERPROFILE%\.aiassist\config.json`:
    ```json
-   { "api_key": "sk-ant-...", "model": "claude-sonnet-5-5" }
+   { "provider": "gemini", "api_key": "ВАШ-КЛЮЧ" }
    ```
-   Либо задать переменную окружения `ANTHROPIC_API_KEY`. Ключ в репозиторий не коммитить.
+   Модель по умолчанию — `gemini-flash-latest`, меняется полем `"model"`.
+   Для Claude: `{ "provider": "anthropic", "api_key": "sk-ant-..." }`.
+   Ключ также можно задать переменной окружения `GEMINI_API_KEY` / `ANTHROPIC_API_KEY`.
+   Ключ в репозиторий не коммитить.
 4. Открыть проект в Revit → вкладка **AIAssist** → **AI-ассистент**.
 
 Примеры запросов: «сколько в модели стен и дверей», «выбери все стены толще 200»,
@@ -30,14 +34,14 @@ AI-ассистент внутри Revit (2022+): чат-окно, команд�
 - `lib/aiassist/agent.py` — цикл «запрос → инструменты → ответ».
 - `lib/aiassist/tools.py` — инструменты Revit для модели (чтение, выбор, запись параметров, кружки осей).
 - `lib/aiassist/bridge.py` — выполнение вызовов API в главном потоке (ExternalEvent).
-- `lib/aiassist/llm.py` — клиент Anthropic API (.NET HttpWebRequest).
+- `lib/aiassist/llm.py` — провайдеры Gemini и Anthropic с общим интерфейсом; `http.py` — HTTP через .NET.
 - `~/.aiassist/recipes.md` — правила, которым пользователь «обучает» ассистента (добавляются в системный промпт).
 
 ## Безопасность
 
 Инструменты записи показывают окно подтверждения и работают в одной транзакции
 (откат через Ctrl+Z). Результаты инструментов (имена категорий, значения параметров)
-отправляются в Anthropic API.
+отправляются выбранному провайдеру (Google или Anthropic).
 
 ## Планы
 

@@ -106,7 +106,9 @@ def _describe(doc, el):
 def _resolve_ids(ids):
     if ids == "last":
         return list(_last_found)
-    return [int(i) for i in ids]
+    if not isinstance(ids, (list, tuple)):
+        ids = unicode_lower(ids).replace(";", ",").split(",")
+    return [int(i) for i in ids if unicode_lower(i).strip()]
 
 
 def _confirm(title, text):
@@ -178,7 +180,7 @@ def get_model_summary(uiapp):
                       "op": {"type": "string",
                              "enum": ["eq", "ne", "gt", "gte", "lt", "lte",
                                       "contains"]},
-                      "value": {"type": ["string", "number"]},
+                      "value": {"type": "string", "description": "Значение (числа тоже строкой)"},
                   },
                   "required": ["parameter", "op", "value"],
               },
@@ -219,9 +221,8 @@ def find_elements(uiapp, category, scope="project", filters=None):
 
 @tool("select_elements",
       "Выделить элементы в Revit.",
-      {"ids": {"description": "Список id или строка \"last\"",
-               "anyOf": [{"type": "array", "items": {"type": "integer"}},
-                         {"type": "string", "enum": ["last"]}]}},
+      {"ids": {"type": "string",
+               "description": "\"last\" (результат последнего поиска) или id через запятую"}},
       required=["ids"])
 def select_elements(uiapp, ids):
     ids = _resolve_ids(ids)
@@ -248,11 +249,10 @@ def get_parameters(uiapp, id):
 @tool("set_parameter",
       "Записать значение параметра у элементов. Запрашивает подтверждение "
       "пользователя. Числа — в единицах проекта.",
-      {"ids": {"description": "Список id или \"last\"",
-               "anyOf": [{"type": "array", "items": {"type": "integer"}},
-                         {"type": "string", "enum": ["last"]}]},
+      {"ids": {"type": "string",
+               "description": "\"last\" (результат последнего поиска) или id через запятую"},
        "parameter": {"type": "string"},
-       "value": {"type": ["string", "number"]}},
+       "value": {"type": "string", "description": "Значение (числа тоже строкой)"}},
       required=["ids", "parameter", "value"])
 def set_parameter(uiapp, ids, parameter, value):
     doc = uiapp.ActiveUIDocument.Document
