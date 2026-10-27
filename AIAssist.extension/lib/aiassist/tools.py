@@ -252,6 +252,35 @@ def select_elements(uiapp, ids):
     return {"selected": len(ids)}
 
 
+@tool("sum_parameter",
+      "Сумма числового параметра по элементам (например «Объем» или «Площадь») в "
+      "единицах проекта. Пропускает элементы без этого параметра.",
+      {"ids": {"type": "string",
+               "description": "\"last\" или id через запятую"},
+       "parameter": {"type": "string", "description": "Имя параметра, напр. «Объем»"}},
+      required=["ids", "parameter"])
+def sum_parameter(uiapp, ids, parameter):
+    doc = uiapp.ActiveUIDocument.Document
+    ids = _resolve_ids(ids)
+    total, used, skipped, label = 0.0, 0, 0, None
+    for i in ids:
+        el = doc.GetElement(ElementId(i))
+        p = _param(doc, el, parameter) if el is not None else None
+        if p is None or p.StorageType not in (StorageType.Double, StorageType.Integer):
+            skipped += 1
+            continue
+        total += float(_value(doc, p))
+        used += 1
+        if label is None and p.StorageType == StorageType.Double:
+            label = p.AsValueString()  # e.g. "12.3 м³" -> shows the unit
+    if used == 0 and ids:
+        sample = doc.GetElement(ElementId(ids[0]))
+        return {"error": u"Параметр не найден или не числовой: %s" % parameter,
+                "available_parameters": _param_names(doc, sample) if sample else []}
+    return {"parameter": parameter, "elements": used, "skipped": skipped,
+            "total": round(total, 3), "example_value_with_unit": label}
+
+
 @tool("get_parameters",
       "Все параметры одного элемента (имя, значение, только чтение).",
       {"id": {"type": "integer"}}, required=["id"])

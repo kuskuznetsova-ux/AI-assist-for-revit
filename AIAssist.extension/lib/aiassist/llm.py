@@ -22,30 +22,27 @@ def _retry_delay(detail):
     return float(m.group(1)) if m else 20.0
 
 
+TRANSIENT = (500, 502, 503, 504)
+
+
 def _post(url, headers, payload, on_status):
-    """post_json that waits out per-minute rate limits (HTTP 429)."""
+    """post_json that waits out rate limits (429) and temporary overloads (5xx)."""
     for attempt in range(MAX_RETRIES + 1):
         try:
             return http.post_json(url, headers, payload)
         except LLMError as ex:
-            wait = _retry_delay(getattr(ex, "detail", u"")) + 1
-            if (getattr(ex, "status", None) != 429 or attempt == MAX_RETRIES
-                    or wait > MAX_WAIT):
+            status = getattr(ex, "status", None)
+            if status == 429:
+                wait = _retry_delay(getattr(ex, "detail", u"")) + 1
+            elif status in TRANSIENT:
+                wait = 5 * (2 ** attempt)
+            else:
+                raise
+            if attempt == MAX_RETRIES or wait > MAX_WAIT:
                 raise
             if on_status:
-                on_status(u"Лимит запросов, жду %d с…" % wait)
+                on_status(u"Сервер занят или лимит, жду %d с…" % wait)
             time.sleep(wait)
-
-
-def make_chat(cfg):
-    if not cfg["api_key"]:
-        raise LLMError(u"Не задан API-ключ. Укажите api_key в "
-                       u"~/.aiassist/config.json (или переменную окружения).")
-    if cfg["provider"] == "anthropic":
-        return AnthropicChat(cfg)
-    if cfg["provider"] == "gemini":
-        return GeminiChat(cfg)
-    raise LLMError(u"Неизвестный provider: %s" % cfg["provider"])
 
 
 class AnthropicChat(object):
