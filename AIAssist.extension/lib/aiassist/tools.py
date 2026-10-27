@@ -11,6 +11,7 @@ from System.Collections.Generic import List
 from Autodesk.Revit.DB import (
     ElementId, FilteredElementCollector, Grid, DatumEnds, StorageType,
     Transaction, UnitUtils)
+from aiassist import jsonutil
 from Autodesk.Revit.UI import TaskDialog, TaskDialogCommonButtons, TaskDialogResult
 
 TOOLS = {}
@@ -421,41 +422,66 @@ def ask_user(uiapp, question, options, multiple=False):
        "scope": {"type": "string", "enum": ["project", "active_view"]}},
       required=["category"])
 def choose_filter(uiapp, category, hint=None, scope="project"):
+    """Like a schedule filter: pick field, condition, value; add more conditions."""
     from pyrevit import forms
     doc = uiapp.ActiveUIDocument.Document
     cat = _find_category(doc, category)
     if cat is None:
         return {"error": u"Категория не найдена: %s" % category}
-    sample = None
+
+    # Parameters of the category (instance + type) from a sample of elements,
+    # each with an example value so the user recognises the field.
+    examples = {}
+    count = 0
     for el in FilteredElementCollector(doc).OfCategoryId(cat.Id).WhereElementIsNotElementType():
-        sample = el
-        break
-    if sample is None:
+        for source in (el, doc.GetElement(el.GetTypeId())):
+            if source is None:
+                continue
+            for p in source.Parameters:
+                name = jsonutil.text(p.Definition.Name)
+                if name not in examples or not examples[name]:
+                    examples[name] = jsonutil.text(p.AsValueString() or p.AsString() or u"")
+        count += 1
+        if count >= 50:
+            break
+    if not examples:
         return {"error": u"В проекте нет элементов категории %s" % cat.Name}
 
-    names = _param_names(doc, sample)
-    if hint:
-        near = [n for n in names if unicode_lower(hint) in unicode_lower(n)]
-        names = near or names
-    name = _pick(names, u"Параметр (%s)" % cat.Name)
-    if not name:
-        return {"cancelled": True}
-    label = _pick([l for l, _ in OPERATORS], u"Условие для «%s»" % name)
-    if not label:
-        return {"cancelled": True}
-    op = dict(OPERATORS)[label]
+    names = sorted(examples)
+    if hint:  # likely fields first, but the full list stays available
+        needle = unicode_lower(hint)
+        names = ([n for n in names if needle in unicode_lower(n)] +
+                 [n for n in names if needle not in unicode_lower(n)])
+    labels = {}
+    for n in names:
+        labels[(u"%s    (например: %s)" % (n, examples[n])) if examples[n] else n] = n
+    ordered = [l for n in names for l, v in labels.items() if v == n]
 
-    p = _param(doc, sample, name)
-    example = u""
-    if p is not None:
-        example = u" (например, сейчас: %s)" % p.AsValueString() if p.AsValueString() else u""
-    value = forms.ask_for_string(
-        prompt=u"Значение для «%s» %s%s" % (name, label, example),
-        title=u"Значение (в единицах проекта)")
-    if value is None or not value.strip():
-        return {"cancelled": True}
+    filters = []
+    while True:
+        picked = _pick(ordered, u"Условие %d: поле (%s)" % (len(filters) + 1, cat.Name))
+        if not picked:
+            return {"cancelled": True}
+        name = labels[picked]
+        label = _pick([l for l, _ in OPERATORS], u"Условие для «%s»" % name)
+        if not label:
+            return {"cancelled": True}
+        value = forms.ask_for_string(
+            prompt=u"Значение для «%s» — %s (в единицах проекта)" % (name, label),
+            title=u"Значение")
+        if value is None or not value.strip():
+            return {"cancelled": True}
+        filters.append({"parameter": name, "op": dict(OPERATORS)[label],
+                        "value": value.strip()})
+        more = _pick([u"Найти элементы", u"Добавить ещё условие"],
+                     u"Условий: %d" % len(filters), button=u"OK")
+        if more != u"Добавить ещё условие":
+            break
 
-    result = _do_find(doc, category, scope,
-                      [{"parameter": name, "op": op, "value": value.strip()}])
-    result["chosen_filter"] = {"parameter": name, "op": op, "value": value.strip()}
+    result = _do_find(doc, category, scope, filters)
+    result["chosen_filters"] = filters
     return result
+
+
+# Register tools defined in other modules.
+from aiassist import checks  # noqa: E402,F401
