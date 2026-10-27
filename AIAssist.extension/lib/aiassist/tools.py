@@ -68,6 +68,16 @@ def _param(doc, el, name):
     return p
 
 
+def _param_names(doc, el):
+    """Names of instance + type parameters, to help the model pick the right one."""
+    names = set()
+    for source in (el, doc.GetElement(el.GetTypeId())):
+        if source is not None:
+            for p in source.Parameters:
+                names.add(p.Definition.Name)
+    return sorted(names)
+
+
 def _unit_id(doc, p):
     """Project display unit for measurable parameters, else None."""
     try:
@@ -198,8 +208,17 @@ def find_elements(uiapp, category, scope="project", filters=None):
         collector = FilteredElementCollector(doc)
     collector = collector.OfCategoryId(cat.Id).WhereElementIsNotElementType()
 
+    elements = list(collector)
+    if elements and filters:
+        sample = elements[0]
+        unknown = [f["parameter"] for f in filters
+                   if _param(doc, sample, f["parameter"]) is None]
+        if unknown:
+            return {"error": u"Параметр не найден: %s" % u", ".join(unknown),
+                    "available_parameters": _param_names(doc, sample)}
+
     found = []
-    for el in collector:
+    for el in elements:
         ok = True
         for f in (filters or []):
             p = _param(doc, el, f["parameter"])
