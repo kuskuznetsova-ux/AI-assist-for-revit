@@ -197,8 +197,11 @@ def get_model_summary(uiapp):
       },
       required=["category"])
 def find_elements(uiapp, category, scope="project", filters=None):
+    return _do_find(uiapp.ActiveUIDocument.Document, category, scope, filters)
+
+
+def _do_find(doc, category, scope, filters):
     global _last_found
-    doc = uiapp.ActiveUIDocument.Document
     cat = _find_category(doc, category)
     if cat is None:
         return {"error": u"Категория не найдена: %s" % category}
@@ -342,3 +345,88 @@ def set_grid_bubbles(uiapp, end0=None, end1=None):
         t.RollBack()
         raise
     return {"grids": len(grids), "view": view.Name}
+
+
+# ------------------------------------------------- interactive (user picks)
+
+OPERATORS = [
+    (u"больше (>)", "gt"), (u"больше или равно (≥)", "gte"),
+    (u"равно (=)", "eq"), (u"меньше (<)", "lt"),
+    (u"меньше или равно (≤)", "lte"), (u"не равно (≠)", "ne"),
+    (u"содержит текст", "contains"),
+]
+
+
+def _pick(items, title, multiple=False, button=u"Далее"):
+    from pyrevit import forms
+    return forms.SelectFromList.show(items, title=title, button_name=button,
+                                     multiselect=multiple)
+
+
+@tool("ask_user",
+      "Задать пользователю уточняющий вопрос с вариантами ответа (диалог выбора "
+      "в Revit) и получить выбранное. Используй, когда запрос неоднозначен.",
+      {"question": {"type": "string", "description": "Заголовок диалога"},
+       "options": {"type": "array", "items": {"type": "string"},
+                   "description": "Варианты для выбора"},
+       "multiple": {"type": "boolean",
+                    "description": "Можно выбрать несколько (по умолчанию нет)"}},
+      required=["question", "options"])
+def ask_user(uiapp, question, options, multiple=False):
+    picked = _pick(list(options), question, bool(multiple))
+    if not picked:
+        return {"cancelled": True}
+    return {"selected": picked if multiple else [picked]}
+
+
+@tool("choose_filter",
+      "Интерактивный поиск: пользователь сам выбирает в диалогах параметр, условие "
+      "(больше/меньше/равно…) и значение, затем выполняется поиск элементов "
+      "категории. Используй, если из запроса неясно, по какому параметру или с "
+      "каким условием искать (например «стены тоньше 200»). Результат "
+      "запоминается как ids=\"last\".",
+      {"category": {"type": "string",
+                    "description": "Имя категории, напр. «Стены»"},
+       "hint": {"type": "string",
+                "description": "Подсказка для предвыбора параметров, напр. «толщ»"},
+       "scope": {"type": "string", "enum": ["project", "active_view"]}},
+      required=["category"])
+def choose_filter(uiapp, category, hint=None, scope="project"):
+    from pyrevit import forms
+    doc = uiapp.ActiveUIDocument.Document
+    cat = _find_category(doc, category)
+    if cat is None:
+        return {"error": u"Категория не найдена: %s" % category}
+    sample = None
+    for el in FilteredElementCollector(doc).OfCategoryId(cat.Id).WhereElementIsNotElementType():
+        sample = el
+        break
+    if sample is None:
+        return {"error": u"В проекте нет элементов категории %s" % cat.Name}
+
+    names = _param_names(doc, sample)
+    if hint:
+        near = [n for n in names if unicode_lower(hint) in unicode_lower(n)]
+        names = near or names
+    name = _pick(names, u"Параметр (%s)" % cat.Name)
+    if not name:
+        return {"cancelled": True}
+    label = _pick([l for l, _ in OPERATORS], u"Условие для «%s»" % name)
+    if not label:
+        return {"cancelled": True}
+    op = dict(OPERATORS)[label]
+
+    p = _param(doc, sample, name)
+    example = u""
+    if p is not None:
+        example = u" (например, сейчас: %s)" % p.AsValueString() if p.AsValueString() else u""
+    value = forms.ask_for_string(
+        prompt=u"Значение для «%s» %s%s" % (name, label, example),
+        title=u"Значение (в единицах проекта)")
+    if value is None or not value.strip():
+        return {"cancelled": True}
+
+    result = _do_find(doc, category, scope,
+                      [{"parameter": name, "op": op, "value": value.strip()}])
+    result["chosen_filter"] = {"parameter": name, "op": op, "value": value.strip()}
+    return result
